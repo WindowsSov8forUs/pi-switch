@@ -9,6 +9,11 @@ Manage multiple API keys / OAuth accounts per provider, and define custom
 - `/switch models` — manage accounts: add (via Pi's native login flow),
   edit name/notes, delete; custom provider accounts are configured manually
   (see [Custom provider accounts](#custom-provider-accounts) below)
+- `/switch reload` — import accounts from Pi's existing `auth.json`
+  (api_key / oauth credentials) and `models.json` (custom providers, as
+  `custom:<id>`) into `pi-switch.json`; skips accounts whose `data`
+  deep-equals an existing account (dedup), auto-generates `id`, sets
+  `name` = provider id, `notes` = ""
 
 ## Install
 

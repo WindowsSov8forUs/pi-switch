@@ -4,6 +4,7 @@ import { ensureConfig } from "./store.ts";
 import { simpleSelect, searchSelect, promptAccount } from "./selectors.ts";
 import { activateAccount } from "./activate.ts";
 import { handleModelsCommand } from "./models.ts";
+import { handleReloadCommand } from "./reload.ts";
 
 // ---------------------------------------------------------------------------
 // Provider item builders (only providers with saved accounts)
@@ -93,17 +94,18 @@ async function handleSwitchCommand(ctx: ExtensionContext, pi: ExtensionAPI) {
 // Entry point
 // ---------------------------------------------------------------------------
 
-const SWITCH_SUBCOMMANDS = ["models"];
+const SWITCH_SUBCOMMANDS = ["models", "reload"];
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("switch", {
-    description: "Switch between saved API provider accounts. /switch models — manage accounts.",
+    description: "Switch between saved API provider accounts. /switch models — manage accounts. /switch reload — import from auth.json + models.json.",
     getArgumentCompletions: (prefix) =>
       SWITCH_SUBCOMMANDS.filter((v) => v.startsWith(prefix.trim())).map((v) => ({ value: v, label: v })),
     handler: async (args, ctx) => {
       if (ctx.mode !== "tui") { ctx.ui.notify("/switch requires interactive TUI mode", "error"); return; }
       const sub = args?.trim();
       if (sub === "models") { await handleModelsCommand(ctx, pi); return; }
+      if (sub === "reload") { await handleReloadCommand(ctx); return; }
       await handleSwitchCommand(ctx, pi);
     },
   });
