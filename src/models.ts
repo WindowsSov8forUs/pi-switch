@@ -1,8 +1,7 @@
 import type { ExtensionContext, ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { Account, Credential, ProviderConfig, ProviderModelDef, SelectorItem } from "./types.js";
+import type { Account, Credential, SelectorItem } from "./types.js";
 import { LoginDialogComponent, ExtensionSelectorComponent } from "@earendil-works/pi-coding-agent";
-import type { Api } from "@earendil-works/pi-ai";
-import { ensureConfig, saveConfig, saveAccount, removeAccount, slugify } from "./store.js";
+import { ensureConfig, saveConfig, saveAccount, removeAccount } from "./store.js";
 import { simpleSelect, searchSelect, promptAccount } from "./selectors.js";
 
 /** Built-in provider IDs — from pi-ai builtinProviders(). */
@@ -19,22 +18,6 @@ const BUILTIN_IDS = new Set([
 ]);
 
 const ADD_ACCOUNT_VALUE = "__pi_switch_add_account__";
-const ADD_PROVIDER_VALUE = "__pi_switch_add_provider__";
-
-const API_OPTIONS = [
-  "openai-completions", "openai-responses", "anthropic-messages",
-  "google-generative-ai", "mistral-conversations",
-] as const;
-
-/** Map ProviderModelDef[] → registerProvider models input. */
-function modelsInput(models: ProviderModelDef[] = [], fallbackBaseUrl?: string) {
-  return models.map((m) => ({
-    id: m.id, name: m.name, reasoning: m.reasoning, input: m.input,
-    contextWindow: m.contextWindow, maxTokens: m.maxTokens, cost: m.cost,
-    api: m.api, baseUrl: m.baseUrl ?? fallbackBaseUrl,
-    headers: m.headers, thinkingLevelMap: m.thinkingLevelMap, compat: m.compat,
-  }));
-}
 
 // ---------------------------------------------------------------------------
 // /switch models — main flow
@@ -108,26 +91,27 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
       items.sort((a, b) => a.label.localeCompare(b.label));
 
       if (items.length === 0) {
-        this.ctx.ui.notify("No additional providers configured. Use Add provider... first.", "info");
+        this.ctx.ui.notify(
+          "No custom providers configured. Add them manually to ~/.pi/agent/pi-switch.json — see README.",
+          "info",
+        );
         return this.showProviderTypeSelector();
       }
 
-      const key = await searchSelect(this.ctx, "Select provider", items, {
-        pinned: { label: "Add provider...", value: ADD_PROVIDER_VALUE },
-      });
+      const key = await searchSelect(this.ctx, "Select provider", items);
       if (!key) return this.showProviderTypeSelector();
-
-      if (key === ADD_PROVIDER_VALUE) return this.addProvider();
 
       return this.showAccountList(key);
     },
 
-    /** Account list with pinned "Add account..." for both builtin and custom. */
+    /** Account list; "Add account..." is only offered for built-in providers —
+     *  custom provider accounts are configured manually in pi-switch.json. */
     async showAccountList(key: string): Promise<void> {
       const accounts = this.cfg.providers[key] ?? [];
+      const isCustom = key.startsWith("custom:");
 
       const accountId = await promptAccount(this.ctx, key, accounts, {
-        pinned: { label: "Add account...", value: ADD_ACCOUNT_VALUE },
+        pinned: isCustom ? undefined : { label: "Add account...", value: ADD_ACCOUNT_VALUE },
       });
       if (!accountId) return this.showProviderTypeSelector();
 
@@ -142,168 +126,47 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
     },
 
     // -----------------------------------------------------------------------
-    // Add custom provider
-    // -----------------------------------------------------------------------
-
-    async addProvider(): Promise<void> {
-      const slug = await this.ctx.ui.input("Provider slug (e.g. my-llm)", "");
-      if (!slug) return this.showAdditionalProviderList();
-      const key = "custom:" + slugify(slug);
-
-      if ((this.cfg.providers[key] ?? []).length > 0) {
-        this.ctx.ui.notify(`Provider "${slug}" already exists.`, "warning");
-        return this.showAdditionalProviderList();
-      }
-
-      const name = await this.ctx.ui.input("Account name", slug);
-      if (name === undefined) return this.showAdditionalProviderList();
-      const notes = await this.ctx.ui.input("Notes (optional)", "");
-      if (notes === undefined) return this.showAdditionalProviderList();
-
-      const def = await this.promptProviderDefinition();
-      if (!def) return this.showAdditionalProviderList();
-
-      // Temp-register to get composed apiKey auth, run login flow for first key
-      const tempId = "pi-switch-add-" + Date.now().toString(36);
-      this.pi.registerProvider(tempId, {
-        name: name,
-        baseUrl: def.baseUrl, api: def.api,
-        models: modelsInput(def.models, def.baseUrl),
-      });
-      const provider = this.ctx.modelRegistry.getProvider(tempId);
-      const cred = provider?.auth?.apiKey
-        ? await this.runLoginFlow(provider, tempId, "api_key")
-        : null;
-      this.pi.unregisterProvider(tempId);
-      if (!cred || cred.type !== "api_key") return this.showAdditionalProviderList();
-
-      const blob: ProviderConfig = {
-        name,
-        baseUrl: def.baseUrl,
-        api: def.api,
-        apiKey: cred.key,
-        models: def.models,
-      };
-      saveAccount(key, name, notes, blob);
-      await saveConfig();
-      this.ctx.ui.notify(`Provider "${slug}" added.`, "info");
-      return this.showAdditionalProviderList();
-    },
-
-    /** Prompt provider definition (baseUrl/api/models), with optional key hint for auto-fetch. */
-    async promptProviderDefinition(hint?: ProviderConfig): Promise<{ baseUrl: string; api: string; models: ProviderModelDef[] } | null> {
-      const baseUrl = await this.ctx.ui.input("Base URL", hint?.baseUrl ?? "https://api.example.com/v1");
-      if (!baseUrl) return null;
-
-      const apiChoice = await simpleSelect(this.ctx, "API type", [...API_OPTIONS]);
-      if (!apiChoice) return null;
-      const api = apiChoice;
-
-      const models: ProviderModelDef[] = [];
-      const autoFetch = await this.ctx.ui.confirm("Auto-fetch models?", `Fetch from ${baseUrl}/models?`);
-      if (autoFetch) {
-        try {
-          const fetched = await fetchModels(baseUrl, hint?.apiKey ?? "");
-          if (fetched.length > 0) {
-            models.push(...fetched);
-            this.ctx.ui.notify(`Fetched ${fetched.length} model(s).`, "info");
-          } else {
-            this.ctx.ui.notify("No models returned.", "warning");
-          }
-        } catch (err: any) {
-          this.ctx.ui.notify(`Fetch failed: ${err.message}`, "error");
-        }
-      }
-      if (models.length === 0) {
-        const define = await this.ctx.ui.confirm("Define models manually?", "No models fetched. Define manually?");
-        if (define) await this.manualModelEntry(models);
-      }
-
-      return { baseUrl, api, models };
-    },
-
-    // -----------------------------------------------------------------------
-    // Add account (builtin or custom)
+    // Add account (built-in providers only; custom provider accounts are
+    // configured manually in ~/.pi/agent/pi-switch.json)
     // -----------------------------------------------------------------------
 
     async addAccount(key: string): Promise<void> {
-      const isCustom = key.startsWith("custom:");
-      const accounts = this.cfg.providers[key] ?? [];
-      const hintBlob = isCustom ? (accounts[0]?.data as ProviderConfig | undefined) : undefined;
-
-      let provider: any;
-      let tempId: string | undefined;
-
-      if (isCustom) {
-        if (!hintBlob?.baseUrl || !hintBlob.api) {
-          this.ctx.ui.notify("Provider definition missing baseUrl or api.", "error");
-          return this.showAccountList(key);
-        }
-        // Temp-register to get composed apiKey auth
-        tempId = "pi-switch-add-" + Date.now().toString(36);
-        this.pi.registerProvider(tempId, {
-          name: hintBlob.name,
-          baseUrl: hintBlob.baseUrl, api: hintBlob.api as Api,
-          apiKey: hintBlob.apiKey,
-          headers: hintBlob.headers, authHeader: hintBlob.authHeader,
-          models: modelsInput(hintBlob.models, hintBlob.baseUrl),
-        });
-        provider = this.ctx.modelRegistry.getProvider(tempId);
-      } else {
-        provider = this.ctx.modelRegistry.getProvider(key);
-      }
-
+      const provider = this.ctx.modelRegistry.getProvider(key);
       if (!provider) {
-        if (tempId) this.pi.unregisterProvider(tempId);
         this.ctx.ui.notify(`Provider "${key}" not available.`, "error");
         return this.showAccountList(key);
       }
 
-      // Choose auth type (custom → api_key only)
+      // Choose auth type
       const hasOAuth = provider.auth?.oauth?.login !== undefined;
       const hasApiKey = provider.auth?.apiKey?.login !== undefined;
       if (!hasOAuth && !hasApiKey) {
-        if (tempId) this.pi.unregisterProvider(tempId);
         this.ctx.ui.notify(`No login method available for "${key}".`, "error");
         return this.showAccountList(key);
       }
 
       let authType: "oauth" | "api_key" = "api_key";
       if (hasOAuth && hasApiKey) {
-        const oauthLabel = provider.auth.oauth.loginLabel ?? "Sign in with an account";
+        const oauthLabel = provider.auth?.oauth?.loginLabel ?? "Sign in with an account";
         const choice = await simpleSelect(this.ctx, "Select authentication method", [
           oauthLabel,
           "Sign in with an API key",
         ]);
-        if (!choice) {
-          if (tempId) this.pi.unregisterProvider(tempId);
-          return this.showAccountList(key);
-        }
+        if (!choice) return this.showAccountList(key);
         authType = choice !== "Sign in with an API key" ? "oauth" : "api_key";
       } else if (hasOAuth) {
         authType = "oauth";
       }
 
       const cred = await this.runLoginFlow(provider, key, authType);
-      if (tempId) this.pi.unregisterProvider(tempId);
       if (!cred) return this.showAccountList(key);
 
-      // Name + notes
-      const displayName = isCustom
-        ? (hintBlob?.name ?? key.slice(7))
-        : (provider.name ?? key);
-      const name = await this.ctx.ui.input("Account name", displayName);
+      const name = await this.ctx.ui.input("Account name", provider.name ?? key);
       if (name === undefined) return this.showAccountList(key);
       const notes = await this.ctx.ui.input("Notes (optional)", "");
       if (notes === undefined) return this.showAccountList(key);
 
-      if (isCustom && cred.type === "api_key") {
-        // Merge new key into provider definition
-        const newBlob: ProviderConfig = { ...hintBlob!, apiKey: cred.key };
-        saveAccount(key, name, notes, newBlob);
-      } else {
-        saveAccount(key, name, notes, cred);
-      }
+      saveAccount(key, name, notes, cred);
       await saveConfig();
       this.ctx.ui.notify(`Account "${name}" saved.`, "info");
       return this.showAccountList(key);
@@ -431,64 +294,8 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
       return this.showAccountList(key);
     },
 
-    // -----------------------------------------------------------------------
-    // Model entry helpers
-    // -----------------------------------------------------------------------
-
-    async manualModelEntry(models: ProviderModelDef[]): Promise<void> {
-      let more = true;
-      while (more) {
-        const modelId = await this.ctx.ui.input("Model ID (e.g. gpt-4o)", "");
-        if (!modelId) break;
-        const modelName = (await this.ctx.ui.input("Model name", modelId)) ?? modelId;
-        const reasoning = await this.ctx.ui.confirm("Supports reasoning/thinking?", "");
-        const hasImages = await this.ctx.ui.confirm("Supports image input?", "");
-        const ctxWin = parseInt((await this.ctx.ui.input("Context window (tokens)", "128000")) ?? "128000", 10) || 128000;
-        const maxTok = parseInt((await this.ctx.ui.input("Max output tokens", "16384")) ?? "16384", 10) || 16384;
-        models.push({
-          id: modelId, name: modelName, reasoning,
-          input: hasImages ? ["text", "image"] : ["text"],
-          contextWindow: ctxWin, maxTokens: maxTok,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        });
-        more = (await this.ctx.ui.confirm("Add another model?", "")) ?? false;
-      }
-    },
   };
 
   await self.showProviderTypeSelector();
 }
 
-// ---------------------------------------------------------------------------
-// Auto-fetch models from /models endpoint
-// ---------------------------------------------------------------------------
-
-async function fetchModels(baseUrl: string, apiKeyCfg: string): Promise<ProviderModelDef[]> {
-  let key = apiKeyCfg;
-  if (apiKeyCfg.startsWith("$")) {
-    const envName = apiKeyCfg.replace(/^\$\{?/, "").replace(/\}$/, "");
-    key = process.env[envName] ?? apiKeyCfg;
-  }
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (!key.includes("$") || key !== apiKeyCfg) headers["Authorization"] = `Bearer ${key}`;
-
-  const url = baseUrl.replace(/\/+$/, "") + "/models";
-  const resp = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-  const data = (await resp.json()) as {
-    data?: Array<{ id: string; name?: string; context_window?: number; max_tokens?: number;
-      supports_vision?: boolean; supports_reasoning?: boolean; }>;
-    models?: Array<{ name: string }>;
-  };
-  const raw = data.data ?? data.models?.map((m) => ({ id: m.name })) ?? [];
-  return raw.map((item: any) => ({
-    id: item.id ?? item.name ?? "unknown",
-    name: item.name ?? item.id ?? "Unknown",
-    reasoning: item.supports_reasoning ?? false,
-    input: item.supports_vision ? (["text", "image"] as const) : (["text"] as const),
-    contextWindow: item.context_window ?? 128000,
-    maxTokens: item.max_tokens ?? 16384,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  }));
-}

@@ -7,7 +7,8 @@ Manage multiple API keys / OAuth accounts per provider, and define custom
 
 - `/switch` — pick a saved account and register it as a Pi provider
 - `/switch models` — manage accounts: add (via Pi's native login flow),
-  edit name/notes, delete, and add custom providers
+  edit name/notes, delete; custom provider accounts are configured manually
+  (see [Custom provider accounts](#custom-provider-accounts) below)
 
 ## Install
 
@@ -45,11 +46,9 @@ Select provider type
   │                         │     API key prompt or full OAuth)
   │                         ├─ existing account → Edit account / Delete account
   └─ Additional Provider → custom providers (count)
-                           ├─ + Add provider...  (define baseUrl/api/models,
-                           │     login for first key)
-                           ├─ + Add account...   (login for another key,
-                           │     reuses provider definition)
-                           └─ existing account → Edit / Delete
+                           └─ existing account → Edit name/notes / Delete
+                             (custom providers and accounts are added manually
+                              — see "Custom provider accounts" below)
 ```
 
 ## Data
@@ -78,6 +77,102 @@ Accounts are stored in `~/.pi/agent/pi-switch.json`:
   (`{ type: "api_key", key }` or `{ type: "oauth", ... }`).
 - Custom account `data` = the provider config shape from `models.json`
   (`{ baseUrl, api, apiKey, models }`).
+
+## Custom provider accounts
+
+Custom (`custom:<slug>`) providers are **configured by editing**
+`~/.pi/agent/pi-switch.json` directly. There is no TUI flow to add them:
+third-party gateways (OpenAI-compatible relays, New-API style hubs, etc.)
+differ too much in what they expose for an interactive form to cover
+reliably.
+
+The account `data` field is the **same shape as a Pi provider registration**
+(`ProviderConfig` — identical to an entry in Pi's `models.json`), so anything
+you can configure in `models.json` can be stored here and activated with
+`/switch`.
+
+```json
+{
+  "version": 1,
+  "providers": {
+    "custom:my-llm": [
+      {
+        "id": "main-lz9def",
+        "name": "Main",
+        "notes": "company gateway",
+        "data": {
+          "name": "My LLM",
+          "baseUrl": "https://gateway.example.com/v1",
+          "api": "openai-responses",
+          "apiKey": "$MY_LLM_KEY",
+          "authHeader": true,
+          "models": [
+            {
+              "id": "gpt-5.6-sol",
+              "name": "GPT-5.6 Sol",
+              "reasoning": true,
+              "input": ["text", "image"],
+              "contextWindow": 272000,
+              "maxTokens": 128000,
+              "cost": {
+                "input": 5, "output": 30,
+                "cacheRead": 0.5, "cacheWrite": 6.25
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+### `data` fields
+
+| Field | Required | Description |
+|---|---|---|
+| `baseUrl` | yes | API root URL |
+| `api` | yes | wire protocol: `openai-completions`, `openai-responses`, `anthropic-messages`, `google-generative-ai`, `mistral-conversations` |
+| `apiKey` | no | literal key, `$ENV_VAR` / `${ENV_VAR}` reference, or `!command` |
+| `name` | no | display name |
+| `headers` / `authHeader` | no | extra request headers / whether to send `Authorization: Bearer` |
+| `models` | no* | model definitions (see below); without it the provider has no models |
+
+### `models[]` entry fields
+
+| Field | Description |
+|---|---|
+| `id` / `name` | model ID and display name |
+| `api` | per-model protocol override |
+| `reasoning` | whether the model supports extended thinking |
+| `input` | `["text"]` or `["text", "image"]` |
+| `contextWindow` / `maxTokens` | token limits |
+| `cost` | per-million-token USD: `{ input, output, cacheRead, cacheWrite, tiers? }` |
+| `thinkingLevelMap` | maps Pi thinking levels to provider-specific values (`null` marks a level unsupported) |
+| `compat` | provider compatibility flags (`supportsStrictMode`, etc.) |
+
+### Where does the model info come from?
+
+- The model **id list** is usually available from the gateway's
+  `GET /v1/models`, authenticated with the account's key. For aggregation
+  gateways (e.g. New-API based hubs) this list is **per-token**: different
+  accounts may see different models, so the snapshot belongs to the account.
+- **Pricing** is sometimes exposed — New-API style hubs provide
+  `GET /api/pricing` with `model_ratio` / `completion_ratio` /
+  `cache_ratio` / `create_cache_ratio`, from which the `cost` values can be
+  derived (and they may change over time).
+- `contextWindow`, `maxTokens`, `reasoning`, `thinkingLevelMap`, `compat` are
+  rarely exposed by the API and usually have to be filled in from the vendor's
+  docs. Treat the snapshot as best-effort: gateways adjust pricing and models
+  without notice.
+
+### Tips
+
+- Already configured the provider in Pi's `models.json`? Copy that provider
+  entry verbatim as the account `data` — the shapes are identical.
+- Use `$ENV_VAR` references for `apiKey` instead of plaintext keys.
+- The account `id` is arbitrary (unique per provider); it only appears in the
+  registered provider id `pi-switch:custom:<slug>:<account-id>`.
 
 ## Development
 
