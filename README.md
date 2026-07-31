@@ -234,15 +234,14 @@ pi -e ./index.ts
 
 ### Release
 
-`.github/workflows/release.yml` creates a GitHub tag and Release manually:
+`.github/workflows/release.yml` validates an existing GitHub Release after it is published:
 
 1. Update `version` in `package.json` and commit it to the default branch.
-2. Open **Actions → Release → Run workflow** and enter the same version without
-   the `v` prefix.
-3. CI runs `npm ci` and `npm run build`, validates the version, then creates the
-   `v<version>` tag and Release.
-4. The Release notes and job summary contain the exact pinned `pi install`
-   command for this repository.
+2. Create and publish a `v<version>` GitHub Release for that commit.
+3. The `release.published` event checks out the Release tag, runs `npm ci` and
+   `npm run build`, and validates the tag against `package.json`.
+4. After validation, CI adds the exact pinned `pi install` command to the
+   existing Release notes and job summary. It does not create a tag or Release.
 
 Pi clones the selected tag, installs production dependencies, and loads
 `index.ts` from `package.json`'s `pi.extensions`; no compiled Release asset is
