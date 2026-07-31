@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "Multi-account provider switching for Pi — manage multiple API keys and custom providers per provider, with /switch and /switch models.",
   "type": "module",
-  "main": "./dist/index.js",
   "keywords": [
     "pi-package",
     "pi",
@@ -15,21 +14,19 @@
   ],
   "license": "MIT",
   "files": [
-    "dist/**/*.js",
+    "*.ts",
     "README.md",
     "LICENSE"
   ],
   "pi": {
     "extensions": [
-      "./dist/index.js"
+      "./index.ts"
     ]
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-agent-core": "*",
     "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*",
-    "typebox": "*"
+    "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.83.0",

@@ -18,12 +18,21 @@ with subcommands:
 
 ## Install
 
+Install a pinned GitHub Release:
+
 ```bash
-pi install npm:pi-switch
+pi install git:github.com/WindowsSov8forUs/pi-switch@v0.1.0
 ```
 
-Distribution is npm-only. There is no git/local-path install path (see
-[Development](#development) for how to run from source).
+To try it without changing Pi settings:
+
+```bash
+pi -e git:github.com/WindowsSov8forUs/pi-switch@v0.1.0
+```
+
+A tag pins the installed version. After a new release, run `pi install` again
+with the new tag. An unpinned default-branch install can instead be updated
+with `pi update --extensions`, but is less reproducible.
 
 ## Usage
 
@@ -213,38 +222,31 @@ you can configure in `models.json` can be stored here and activated with
 
 ## Development
 
-Local development is **flat TypeScript** — no build step. The entry point is
-`index.ts` at the repository root; Pi's extension discovery loads it directly
-via jiti (it only falls back to `./dist/index.js` when the compiled output
-exists, so keep `dist/` absent during local work). Edit any `.ts` file and
-run `/reload` in Pi to pick up changes.
-
-To verify the packaged (npm) artifact locally:
+Local development is **flat TypeScript**. The entry point is `index.ts` at the
+repository root, and Pi loads it directly through jiti. Edit any `.ts` file
+and run `/reload` in Pi to pick up changes.
 
 ```bash
 npm ci
-npm run build        # tsc → dist/ (compiled output is gitignored)
-pi -e ./dist/index.js   # load the compiled artifact once
+npm run build       # Type-check and optionally emit ignored dist/ output
+pi -e ./index.ts
 ```
 
 ### Release
 
-Publishing is handled by GitHub Actions (`.github/workflows/release.yml`): a
-push of a `v*` tag runs `npm ci` → `tsc` → `npm publish`. The tarball ships
-only `dist/` + README + LICENSE (`files` whitelist); runtime deps are the
-`@earendil-works/pi-*` peers provided by Pi, `devDependencies` are
-CI-only.
+`.github/workflows/release.yml` creates a GitHub tag and Release manually:
 
-```bash
-npm version patch   # bumps version in package.json
-npm run build       # sanity check before tagging
-git push --tags
-```
+1. Update `version` in `package.json` and commit it to the default branch.
+2. Open **Actions → Release → Run workflow** and enter the same version without
+   the `v` prefix.
+3. CI runs `npm ci` and `npm run build`, validates the version, then creates the
+   `v<version>` tag and Release.
+4. The Release notes and job summary contain the exact pinned `pi install`
+   command for this repository.
 
-> **Note on git installs:** `pi install git:...` clones the repo and runs
-> `npm install --omit=dev`, so the compiled `dist/` must exist in the clone.
-> Since `dist/` is gitignored (built only in CI), git installs will silently
-> load nothing. Use `npm:` installs only.
+Pi clones the selected tag, installs production dependencies, and loads
+`index.ts` from `package.json`'s `pi.extensions`; no compiled Release asset is
+required.
 
 ## License
 
