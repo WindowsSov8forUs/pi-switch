@@ -3,7 +3,8 @@
 Multi-account provider switching for [Pi](https://github.com/earendil-works/pi).
 
 Manage multiple API keys / OAuth accounts per provider, and define custom
-(additional) providers with per-account credentials — all through two commands:
+(additional) providers with per-account credentials — all through `/switch`
+with subcommands:
 
 - `/switch` — pick a saved account and register it as a Pi provider
 - `/switch models` — manage accounts: add (via Pi's native login flow),
@@ -56,6 +57,35 @@ Select provider type
                              (custom providers and accounts are added manually
                               — see "Custom provider accounts" below)
 ```
+
+### `/switch reload`
+
+Import accounts from Pi's existing configuration into `pi-switch.json` — an
+idempotent one-shot migration instead of re-typing credentials:
+
+| Source | Imported as | Condition |
+|---|---|---|
+| `auth.json` | provider id (e.g. `anthropic`) | credential shaped as `{ type: "api_key" \| "oauth", ... }` |
+| `models.json` | `custom:<provider-id>` | entry has both `baseUrl` and `models` |
+
+```
+/switch reload
+→ Imported 3 account(s), skipped 1 duplicate(s).
+```
+
+Rules:
+
+- `id` is auto-generated (`slugify(name)-<timestamp36>`); `name` = provider
+  id; `notes` = `""`.
+- `data` is copied verbatim from the source file.
+- **Dedup:** an account whose `data` deep-equals an existing account's `data`
+  is skipped (counted in the notification).
+- `models.json` entries without both `baseUrl` and `models` (e.g. pure
+  built-in overrides) are skipped; non-`api_key`/`oauth` `auth.json` entries
+  are skipped.
+
+Because it dedups on `data` equality, re-running it is a no-op after the
+first import.
 
 ## Data
 
@@ -174,8 +204,9 @@ you can configure in `models.json` can be stored here and activated with
 
 ### Tips
 
-- Already configured the provider in Pi's `models.json`? Copy that provider
-  entry verbatim as the account `data` — the shapes are identical.
+- Already configured providers in Pi's `models.json` / `auth.json`? Run
+  `/switch reload` to import them into `pi-switch.json` instead of copying
+  entries by hand — the shapes are identical.
 - Use `$ENV_VAR` references for `apiKey` instead of plaintext keys.
 - The account `id` is arbitrary (unique per provider); it only appears in the
   registered provider id `pi-switch:custom:<slug>:<account-id>`.
