@@ -13,10 +13,11 @@ Manage multiple API keys / OAuth accounts per provider, and define custom
 ## Install
 
 ```bash
-pi install npm:pi-switch          # once published
-pi install git:github.com/<you>/pi-switch   # from git
-pi install /path/to/pi-switch     # local path
+pi install npm:pi-switch
 ```
+
+Distribution is npm-only. There is no git/local-path install path (see
+[Development](#development) for how to run from source).
 
 ## Usage
 
@@ -176,11 +177,38 @@ you can configure in `models.json` can be stored here and activated with
 
 ## Development
 
+Local development is **flat TypeScript** — no build step. The entry point is
+`index.ts` at the repository root; Pi's extension discovery loads it directly
+via jiti (it only falls back to `./dist/index.js` when the compiled output
+exists, so keep `dist/` absent during local work). Edit any `.ts` file and
+run `/reload` in Pi to pick up changes.
+
+To verify the packaged (npm) artifact locally:
+
 ```bash
-npm install          # dev deps: typescript + pi-coding-agent
-npm run build        # tsc → dist/
-pi install /path/to/pi-switch   # local install for testing
+npm ci
+npm run build        # tsc → dist/ (compiled output is gitignored)
+pi -e ./dist/index.js   # load the compiled artifact once
 ```
+
+### Release
+
+Publishing is handled by GitHub Actions (`.github/workflows/release.yml`): a
+push of a `v*` tag runs `npm ci` → `tsc` → `npm publish`. The tarball ships
+only `dist/` + README + LICENSE (`files` whitelist); runtime deps are the
+`@earendil-works/pi-*` peers provided by Pi, `devDependencies` are
+CI-only.
+
+```bash
+npm version patch   # bumps version in package.json
+npm run build       # sanity check before tagging
+git push --tags
+```
+
+> **Note on git installs:** `pi install git:...` clones the repo and runs
+> `npm install --omit=dev`, so the compiled `dist/` must exist in the clone.
+> Since `dist/` is gitignored (built only in CI), git installs will silently
+> load nothing. Use `npm:` installs only.
 
 ## License
 

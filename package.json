@@ -16,7 +16,6 @@
   "license": "MIT",
   "files": [
     "dist/**/*.js",
-    "src/**/*.ts",
     "README.md",
     "LICENSE"
   ],

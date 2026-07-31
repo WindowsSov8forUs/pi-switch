@@ -1,9 +1,9 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Account, SelectorItem, SwitchConfig } from "./types.js";
-import { ensureConfig } from "./store.js";
-import { simpleSelect, searchSelect, promptAccount } from "./selectors.js";
-import { activateAccount } from "./activate.js";
-import { handleModelsCommand } from "./models.js";
+import type { Account, SelectorItem, SwitchConfig } from "./types.ts";
+import { ensureConfig } from "./store.ts";
+import { simpleSelect, searchSelect, promptAccount } from "./selectors.ts";
+import { activateAccount } from "./activate.ts";
+import { handleModelsCommand } from "./models.ts";
 
 // ---------------------------------------------------------------------------
 // Provider item builders (only providers with saved accounts)

@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Account, Credential, ProviderConfig, SwitchConfig } from "./types.js";
+import type { Account, Credential, ProviderConfig, SwitchConfig } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // Paths

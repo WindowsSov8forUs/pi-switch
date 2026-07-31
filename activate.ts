@@ -1,7 +1,7 @@
 import type { ExtensionContext, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { Account, Credential, OAuthCred, ProviderConfig, ProviderModelDef } from "./types.js";
-import { providerId } from "./store.js";
+import type { Account, Credential, OAuthCred, ProviderConfig, ProviderModelDef } from "./types.ts";
+import { providerId } from "./store.ts";
 
 // ---------------------------------------------------------------------------
 // Model conversion

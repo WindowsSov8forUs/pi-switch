@@ -3,7 +3,7 @@ import {
   Container, fuzzyFilter, getKeybindings, Input, Spacer, Text, TruncatedText,
 } from "@earendil-works/pi-tui";
 import { DynamicBorder, ExtensionSelectorComponent } from "@earendil-works/pi-coding-agent";
-import type { Account, SelectorItem } from "./types.js";
+import type { Account, SelectorItem } from "./types.ts";
 
 // ---------------------------------------------------------------------------
 // Searchable selector (like OAuthSelectorComponent)

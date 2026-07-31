@@ -1,8 +1,8 @@
 import type { ExtensionContext, ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { Account, Credential, SelectorItem } from "./types.js";
+import type { Account, Credential, SelectorItem } from "./types.ts";
 import { LoginDialogComponent, ExtensionSelectorComponent } from "@earendil-works/pi-coding-agent";
-import { ensureConfig, saveConfig, saveAccount, removeAccount } from "./store.js";
-import { simpleSelect, searchSelect, promptAccount } from "./selectors.js";
+import { ensureConfig, saveConfig, saveAccount, removeAccount } from "./store.ts";
+import { simpleSelect, searchSelect, promptAccount } from "./selectors.ts";
 
 /** Built-in provider IDs — from pi-ai builtinProviders(). */
 const BUILTIN_IDS = new Set([
