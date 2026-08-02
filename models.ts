@@ -189,20 +189,33 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
           // Copy of InteractiveMode.showAuthPrompt
           const showAuthPrompt = (dialog_: any, prompt_: any): Promise<string> => {
             if (prompt_.type === "select") {
-              // Copy of InteractiveMode.showAuthSelect
+              // Copy of InteractiveMode.showAuthSelect. pi's original swaps the
+              // editor container (clear + addChild + setFocus); inside ctx.ui.custom
+              // we can't touch the editor container, so mount the selector INTO the
+              // dialog's content container instead (still rendered + focusable).
               return new Promise((resolveSelect, rejectSelect) => {
                 const labels = prompt_.options.map((o: any) => o.label);
+                const restoreDialog = () => {
+                  dialog_.contentContainer.clear();
+                  tui.setFocus(dialog_);
+                  tui.requestRender();
+                };
                 const selector = new ExtensionSelectorComponent(
                   prompt_.message, labels,
                   (label: string) => {
+                    restoreDialog();
                     const id = prompt_.options.find((o: any) => o.label === label)?.id;
                     if (id) resolveSelect(id);
                     else rejectSelect(new Error("Login cancelled"));
                   },
-                  () => rejectSelect(new Error("Login cancelled")),
+                  () => {
+                    restoreDialog();
+                    rejectSelect(new Error("Login cancelled"));
+                  },
                 );
+                dialog_.contentContainer.clear();
+                dialog_.contentContainer.addChild(selector);
                 tui.setFocus(selector);
-                (dialog_ as any)._selectorOverride = selector;
                 tui.requestRender();
               });
             }
