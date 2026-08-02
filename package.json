@@ -1,6 +1,6 @@
 {
   "name": "pi-switch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Multi-account provider switching for Pi — manage multiple API keys and custom providers per provider, with /switch and /switch models.",
   "type": "module",
   "keywords": [
