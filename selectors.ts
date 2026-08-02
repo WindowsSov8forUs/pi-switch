@@ -2,7 +2,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   Container, fuzzyFilter, getKeybindings, Input, Spacer, Text, TruncatedText,
 } from "@earendil-works/pi-tui";
-import { DynamicBorder, ExtensionSelectorComponent } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, ExtensionSelectorComponent, keyHint } from "@earendil-works/pi-coding-agent";
 import type { Account, SelectorItem } from "./types.ts";
 
 // ---------------------------------------------------------------------------
@@ -143,6 +143,74 @@ export class SearchSelector extends Container {
       this.filter(this.searchInput.getValue());
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Prefilled text input (pi's ExtensionInputComponent drops the placeholder and
+// has no initial-value support, so build a small dialog with Input.setValue)
+// ---------------------------------------------------------------------------
+
+class PromptInputDialog extends Container {
+  private input: Input;
+  private onConfirm: (value: string) => void;
+  private onCancel: () => void;
+  private _focused = false;
+
+  get focused() { return this._focused; }
+  set focused(v: boolean) { this._focused = v; this.input.focused = v; }
+
+  constructor(
+    theme: any,
+    title: string,
+    initialValue: string,
+    onConfirm: (value: string) => void,
+    onCancel: () => void,
+  ) {
+    super();
+    this.onConfirm = onConfirm;
+    this.onCancel = onCancel;
+    this.addChild(new DynamicBorder());
+    this.addChild(new Spacer(1));
+    this.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
+    this.addChild(new Spacer(1));
+    this.input = new Input();
+    this.input.setValue(initialValue);
+    this.addChild(this.input);
+    this.addChild(new Spacer(1));
+    this.addChild(new Text(`${keyHint("tui.select.confirm", "submit")}  ${keyHint("tui.select.cancel", "cancel")}`, 1, 0));
+    this.addChild(new Spacer(1));
+    this.addChild(new DynamicBorder());
+  }
+
+  handleInput(keyData: string): void {
+    const kb = getKeybindings();
+    if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
+      this.onConfirm(this.input.getValue());
+    } else if (kb.matches(keyData, "tui.select.cancel")) {
+      this.onCancel();
+    } else {
+      this.input.handleInput(keyData);
+    }
+  }
+}
+
+/** Text input with an initial value; resolves null on cancel. */
+export function promptInput(
+  ctx: ExtensionContext,
+  title: string,
+  initialValue = "",
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    ctx.ui.custom<void>((_tui, theme, _kb, done) => {
+      return new PromptInputDialog(theme, title, initialValue, (value) => {
+        done();
+        resolve(value);
+      }, () => {
+        done();
+        resolve(null);
+      });
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

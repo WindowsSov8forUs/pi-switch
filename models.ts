@@ -2,7 +2,7 @@ import type { ExtensionContext, ExtensionAPI } from "@earendil-works/pi-coding-a
 import type { Account, Credential, SelectorItem } from "./types.ts";
 import { LoginDialogComponent, ExtensionSelectorComponent } from "@earendil-works/pi-coding-agent";
 import { ensureConfig, saveConfig, saveAccount, removeAccount } from "./store.ts";
-import { simpleSelect, searchSelect, promptAccount } from "./selectors.ts";
+import { simpleSelect, searchSelect, promptAccount, promptInput } from "./selectors.ts";
 
 /** Built-in provider IDs — from pi-ai builtinProviders(). */
 const BUILTIN_IDS = new Set([
@@ -298,10 +298,10 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
     },
 
     async editAccount(key: string, account: Account): Promise<void> {
-      const name = await this.ctx.ui.input("Name", account.name);
-      if (name === undefined) return this.showAccountList(key);
-      const notes = await this.ctx.ui.input("Notes", account.notes);
-      if (notes === undefined) return this.showAccountList(key);
+      const name = await promptInput(this.ctx, "Name", account.name);
+      if (name === null) return this.showAccountList(key);
+      const notes = await promptInput(this.ctx, "Notes", account.notes);
+      if (notes === null) return this.showAccountList(key);
       account.name = name;
       account.notes = notes;
       await saveConfig();
