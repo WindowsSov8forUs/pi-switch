@@ -161,10 +161,10 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
       const cred = await this.runLoginFlow(provider, key, authType);
       if (!cred) return this.showAccountList(key);
 
-      const name = await this.ctx.ui.input("Account name", provider.name ?? key);
-      if (name === undefined) return this.showAccountList(key);
-      const notes = await this.ctx.ui.input("Notes (optional)", "");
-      if (notes === undefined) return this.showAccountList(key);
+      const name = await promptInput(this.ctx, "Account name", provider.name ?? key);
+      if (name === null) return this.showAccountList(key);
+      const notes = await promptInput(this.ctx, "Notes (optional)", "");
+      if (notes === null) return this.showAccountList(key);
 
       saveAccount(key, name, notes, cred);
       await saveConfig();
