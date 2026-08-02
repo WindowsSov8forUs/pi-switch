@@ -186,14 +186,15 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
           const dialog = new LoginDialogComponent(tui, key, () => {}, providerName,
             `Login to ${providerName}`);
 
-          // Copy of InteractiveMode.showAuthPrompt
-          const showAuthPrompt = (dialog_: any, prompt_: any): Promise<string> => {
+          // Copy of InteractiveMode.showAuthPrompt (incl. prompt.signal abort race)
+          const showAuthPrompt = async (dialog_: any, prompt_: any): Promise<string> => {
+            let response: Promise<string>;
             if (prompt_.type === "select") {
               // Copy of InteractiveMode.showAuthSelect. pi's original swaps the
               // editor container (clear + addChild + setFocus); inside ctx.ui.custom
               // we can't touch the editor container, so mount the selector INTO the
               // dialog's content container instead (still rendered + focusable).
-              return new Promise((resolveSelect, rejectSelect) => {
+              response = new Promise((resolveSelect, rejectSelect) => {
                 const labels = prompt_.options.map((o: any) => o.label);
                 const restoreDialog = () => {
                   dialog_.contentContainer.clear();
@@ -218,11 +219,24 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
                 tui.setFocus(selector);
                 tui.requestRender();
               });
+            } else if (prompt_.type === "manual_code") {
+              response = dialog_.showManualInput(prompt_.message);
+            } else {
+              response = dialog_.showPrompt(prompt_.message, prompt_.placeholder);
             }
-            if (prompt_.type === "manual_code") {
-              return dialog_.showManualInput(prompt_.message);
+            if (!prompt_.signal) return response;
+            if (prompt_.signal.aborted) throw new Error("Login cancelled");
+            const signal: AbortSignal = prompt_.signal;
+            let onAbort: (() => void) | undefined;
+            const aborted = new Promise<never>((_resolve, reject) => {
+              onAbort = () => reject(new Error("Login cancelled"));
+              signal.addEventListener("abort", onAbort, { once: true });
+            });
+            try {
+              return await Promise.race([response, aborted]);
+            } finally {
+              if (onAbort) signal.removeEventListener("abort", onAbort);
             }
-            return dialog_.showPrompt(prompt_.message, prompt_.placeholder);
           };
 
           // Copy of InteractiveMode.notifyAuthDialog
