@@ -112,6 +112,7 @@ export async function handleModelsCommand(ctx: ExtensionContext, pi: ExtensionAP
 
       const accountId = await promptAccount(this.ctx, key, accounts, {
         pinned: isCustom ? undefined : { label: "Add account...", value: ADD_ACCOUNT_VALUE },
+        activeId: this.cfg.active[key],
       });
       if (!accountId) return this.showProviderTypeSelector();
 

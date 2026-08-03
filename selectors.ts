@@ -258,12 +258,14 @@ export async function promptAccount(
   ctx: ExtensionContext,
   key: string,
   accounts: Account[],
-  opts?: { pinned?: SelectorItem },
+  opts?: { pinned?: SelectorItem; activeId?: string },
 ): Promise<string | null> {
   const providerName = key.startsWith("custom:") ? key.slice(7) : key;
   const items: SelectorItem[] = accounts.map((a) => ({
     label: a.name,
     sublabel: a.notes || undefined,
+    inlineSuffix: a.id === opts?.activeId ? "  (active)" : undefined,
+    inlineSuffixColor: "success",
     value: a.id,
   }));
   return searchSelect(ctx, `Select account for ${providerName}`, items, opts);

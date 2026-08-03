@@ -6,7 +6,7 @@ Manage multiple API keys / OAuth accounts per provider, and define custom
 (additional) providers with per-account credentials — all through `/switch`
 with subcommands:
 
-- `/switch` — pick a saved account and register it as a Pi provider
+- `/switch` — make a saved account active on its original Pi provider ID
 - `/switch models` — manage accounts: add (via Pi's native login flow),
   edit name/notes, delete; custom provider accounts are configured manually
   (see [Custom provider accounts](#custom-provider-accounts) below)
@@ -41,14 +41,26 @@ with `pi update --extensions`, but is less reproducible.
 ```
 Select provider type
   ├─ Built-in Provider  →  provider list (only those with saved accounts)
-  │                       →  account list → register + use /model to select
+  │                       →  account list → switch native credential
   └─ Additional Provider →  custom provider list
-                           →  account list → register
+                           →  account list → apply config to original provider
 ```
 
-Registration only registers the provider (`pi-switch:<key>:<account-id>`); you
-then pick the model with Pi's `/model` — pi-switch does not hijack model
-selection.
+`/switch` changes the account behind the **original provider ID**; it does not
+create `pi-switch:*` providers:
+
+- Built-in providers: the selected credential replaces that provider's active
+  credential in Pi's native runtime and `auth.json` (for example,
+  `openai-codex` remains `openai-codex`).
+- Additional providers: the selected provider snapshot is applied to its
+  original ID in `models.json` (`custom:my-llm` switches `my-llm`).
+- The current model selection is not changed. If it already belongs to the
+  switched provider, its next request uses the selected account.
+
+The active account is marked `(active)` in account selectors. Codex OAuth is
+refreshed before an account becomes active, and rotated OAuth tokens are saved
+back to that account immediately. Later token refreshes are synchronized when
+switching away or when the session shuts down.
 
 ### `/switch models`
 
@@ -103,6 +115,10 @@ Accounts are stored in `~/.pi/agent/pi-switch.json`:
 ```json
 {
   "version": 1,
+  "active": {
+    "anthropic": "work-lz8abc",
+    "custom:my-llm": "main-lz9def"
+  },
   "providers": {
     "anthropic": [
       { "id": "work-lz8abc", "name": "Work", "notes": "company key",
@@ -122,6 +138,8 @@ Accounts are stored in `~/.pi/agent/pi-switch.json`:
   (`{ type: "api_key", key }` or `{ type: "oauth", ... }`).
 - Custom account `data` = the provider config shape from `models.json`
   (`{ baseUrl, api, apiKey, models }`).
+- `active` maps each provider key to the account currently applied to Pi's
+  native `auth.json` or `models.json`. It is managed by `/switch`.
 
 ## Custom provider accounts
 
@@ -131,14 +149,15 @@ third-party gateways (OpenAI-compatible relays, New-API style hubs, etc.)
 differ too much in what they expose for an interactive form to cover
 reliably.
 
-The account `data` field is the **same shape as a Pi provider registration**
+The account `data` field is the **same shape as a Pi provider configuration**
 (`ProviderConfig` — identical to an entry in Pi's `models.json`), so anything
-you can configure in `models.json` can be stored here and activated with
-`/switch`.
+you can configure in `models.json` can be stored here and applied to the
+original provider ID with `/switch`.
 
 ```json
 {
   "version": 1,
+  "active": {},
   "providers": {
     "custom:my-llm": [
       {
@@ -217,8 +236,8 @@ you can configure in `models.json` can be stored here and activated with
   `/switch reload` to import them into `pi-switch.json` instead of copying
   entries by hand — the shapes are identical.
 - Use `$ENV_VAR` references for `apiKey` instead of plaintext keys.
-- The account `id` is arbitrary (unique per provider); it only appears in the
-  registered provider id `pi-switch:custom:<slug>:<account-id>`.
+- The account `id` is arbitrary (unique per provider); it is used by the
+  `active` map and is never exposed as a Pi provider ID.
 
 ## Development
 

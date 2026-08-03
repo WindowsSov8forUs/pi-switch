@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import type { Account, SelectorItem, SwitchConfig } from "./types.ts";
 import { ensureConfig } from "./store.ts";
 import { simpleSelect, searchSelect, promptAccount } from "./selectors.ts";
-import { activateAccount } from "./activate.ts";
+import { activateAccount, syncActiveCredentials } from "./activate.ts";
 import { handleModelsCommand } from "./models.ts";
 import { handleReloadCommand } from "./reload.ts";
 
@@ -79,7 +79,9 @@ async function handleSwitchCommand(ctx: ExtensionContext, pi: ExtensionAPI) {
     },
 
     async showAccountSelector(key: string, accounts: Account[], items: SelectorItem[]): Promise<void> {
-      const accountId = await promptAccount(this.ctx, key, accounts);
+      const accountId = await promptAccount(this.ctx, key, accounts, {
+        activeId: this.cfg.active[key],
+      });
       if (!accountId) return this.showProviderSelector(items);
 
       const account = accounts.find((a) => a.id === accountId);
@@ -97,8 +99,12 @@ async function handleSwitchCommand(ctx: ExtensionContext, pi: ExtensionAPI) {
 const SWITCH_SUBCOMMANDS = ["models", "reload"];
 
 export default function (pi: ExtensionAPI) {
+  pi.on("session_shutdown", async (_event, ctx) => {
+    await syncActiveCredentials(ctx);
+  });
+
   pi.registerCommand("switch", {
-    description: "Switch between saved API provider accounts. /switch models — manage accounts. /switch reload — import from auth.json + models.json.",
+    description: "Switch the active account of an existing provider. /switch models — manage accounts. /switch reload — import from auth.json + models.json.",
     getArgumentCompletions: (prefix) =>
       SWITCH_SUBCOMMANDS.filter((v) => v.startsWith(prefix.trim())).map((v) => ({ value: v, label: v })),
     handler: async (args, ctx) => {

@@ -8,8 +8,6 @@ import type { Account, Credential, ProviderConfig, SwitchConfig } from "./types.
 // ---------------------------------------------------------------------------
 
 export const CONFIG_PATH = join(homedir(), ".pi", "agent", "pi-switch.json");
-export const PROVIDER_PREFIX = "pi-switch";
-
 // ---------------------------------------------------------------------------
 // Config CRUD
 // ---------------------------------------------------------------------------
@@ -21,8 +19,12 @@ export async function ensureConfig(): Promise<SwitchConfig> {
   try {
     const raw = await readFile(CONFIG_PATH, "utf-8");
     const parsed = JSON.parse(raw);
-    _config = { version: 1, providers: parsed.providers ?? {} };
-  } catch { _config = { version: 1, providers: {} }; }
+    _config = {
+      version: 1,
+      providers: parsed.providers ?? {},
+      active: parsed.active ?? {},
+    };
+  } catch { _config = { version: 1, providers: {}, active: {} }; }
   return _config;
 }
 
@@ -38,10 +40,6 @@ export async function saveConfig() {
 
 export function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
-}
-
-export function providerId(key: string, accountId: string): string {
-  return `${PROVIDER_PREFIX}:${key}:${accountId}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,11 +62,21 @@ export function saveAccount(key: string, name: string, notes: string, data: Cred
 }
 
 export function removeAccount(key: string, accountId: string) {
-  const list = _config!.providers[key];
+  const cfg = _config!;
+  const list = cfg.providers[key];
   if (!list) return;
   const idx = list.findIndex((a) => a.id === accountId);
   if (idx >= 0) list.splice(idx, 1);
-  if (list.length === 0) delete _config!.providers[key];
+  if (list.length === 0) delete cfg.providers[key];
+  if (cfg.active[key] === accountId) delete cfg.active[key];
+}
+
+export function setActiveAccount(key: string, accountId: string): void {
+  _config!.active[key] = accountId;
+}
+
+export function clearActiveAccount(key: string): void {
+  delete _config!.active[key];
 }
 
 // ---------------------------------------------------------------------------

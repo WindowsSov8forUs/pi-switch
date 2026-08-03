@@ -3,7 +3,10 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 // -- Credentials (auth.json shape) --
 
 export interface ApiKeyCred { type: "api_key"; key: string; env?: Record<string, string> }
-export interface OAuthCred { type: "oauth"; access: string; refresh: string; expires: number; accountId?: string }
+export interface OAuthCred {
+  type: "oauth"; access: string; refresh: string; expires: number; accountId?: string;
+  [key: string]: unknown;
+}
 export type Credential = ApiKeyCred | OAuthCred;
 
 // -- Provider config (models.json shape) --
@@ -33,6 +36,8 @@ export interface Account {
 export interface SwitchConfig {
   version: 1;
   providers: Record<string, Account[]>;
+  /** Currently activated account per original provider key. */
+  active: Record<string, string>;
 }
 
 // -- Selector item --
